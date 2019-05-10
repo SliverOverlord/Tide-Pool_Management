@@ -198,14 +198,14 @@ void tideNeutral(){
 
 //move water from ray tank to tidepool
 void tideIn(){
-  tideNeutral();
+  //tideNeutral();
   tideServo.write(0);
   rayServo.write(0);  
 }
 
 //move water out of the tidepool into the ray tank
 void tideOut(){
-  tideNeutral();
+  //tideNeutral();
   tideServo.write(90);
   rayServo.write(90);
 }
@@ -317,7 +317,7 @@ void initVariables(){
 // Main program
 void loop() {
   //test();
-  tideIn();
+ 
 
   logTimer();
   
