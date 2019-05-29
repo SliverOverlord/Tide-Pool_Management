@@ -35,21 +35,36 @@ const int LowLED  = 10;
 unsigned long startTime = 0;                        // store the tide half-cycle starting time
 unsigned long previousTime = 0;                     // store the time since the pump was either turned on or off.
 
-const unsigned long TideInterval = 6.5 * 60 * 60 * 1000;    // 6.5 hours is the half-period of a tide (in msec)
-const unsigned long pumpOnTime = 5.0 * 60 * 1000;           // Pump is ON for 5 minutes
-const unsigned long pumpOffTime = 6.1 * 60 * 1000;          // Pump is OFF for 6.1 minutes
+// 6.5 hours is the half-period of a tide (in msec)
+const unsigned long TideInterval = 6.5 * 60 * 60 * 1000;
+
+// Pump is ON for 5 minutes
+const unsigned long pumpOnTime = 5.0 * 60 * 1000;
+
+// Pump is OFF for 6.1 minutes
+const unsigned long pumpOffTime = 6.1 * 60 * 1000;
 
 // Tide state variables
-boolean HighTide = false;          // Default lowering tide when you first turn on the system
+boolean HighTide = false; // Default lowering tide when you first turn on the system
 boolean LowTide = false;
+
+//bools for pump state
 boolean filling = false;
 boolean draining = false;
 boolean PumpOn = true;
+
+//Limiters
+boolean overFull = false;
+boolean tooLow = false;
 
 // Sensor varialbles - Initially set all the switches LOW (not tripped)
 int sensorHigh = LOW;
 int sensorLow = LOW;
 int sensorRef = LOW;
+
+// Limiter sensors set to LOW (not tripped)
+int highLimitSensor = LOW;
+int lowLimitSensor = LOW;
 
 // Set the last sensor states
 int lastSensorHigh = sensorHigh;
@@ -102,8 +117,7 @@ Servo rayServo;
 //counter for log
 unsigned long logCount = 0;
 
-
-
+//Functions--------------------------------------
 
 void dumpState(long currentTime, String msg) {
   /* Prints state to serial monitor */
@@ -130,22 +144,13 @@ void dumpState(long currentTime, String msg) {
   Serial.println(sensorRef);
   Serial.println();
 
-  /*Serial.println(F("Starting state of the memory:"));
-  MEMORY_PRINT_START
-  MEMORY_PRINT_HEAPSTART
-  MEMORY_PRINT_HEAPEND
-  MEMORY_PRINT_STACKSTART
-  MEMORY_PRINT_END
-  MEMORY_PRINT_HEAPSIZE
-  FREERAM_PRINT;
-  Serial.println(F("Ending state of the memory"));*/
 }
 
 
 //Turns on Neutral for 5 seconds followed by 
 //Tide in for 5 seconds then tideOut for 5 seconds.
 void test(){
-  tideNeutral();
+  tideIdle();
   delay(5000);
   tideIn();
   delay(5000);
@@ -154,27 +159,41 @@ void test(){
   
 }
 
-//tideNeutral water goes into both tanks
-void tideNeutral(){
+//tideIdle water goes into both tanks
+void tideIdle(){
   tideServo.write(0);
   rayServo.write(90);
+  
+  lcd.print("Tide Idle");
+  delay(2000);
+  lcd.clear();
 }
 
 
 //move water from ray tank to tidepool
 void tideIn(){
-  //tideNeutral();
+  //tideIdle();
   tideServo.write(0);
   rayServo.write(0);
-  strncpy(StateString, "TidePool ", lenString);  
+  
+  //display to lcd
+  lcd.print("Tide Pool Filling");
+  delay(2000);
+  lcd.clear();
+  //strncpy(StateString, "TidePool ", lenString);  
 }
 
 //move water out of the tidepool into the ray tank
 void tideOut(){
-  //tideNeutral();Filling
+  //tideIdle();Filling
   tideServo.write(90);
   rayServo.write(90);
-  strncpy(StateString, "TidePool Draining", lenString);
+  
+  // output to lcd
+  lcd.print("Tide Pool Filling");
+  delay(2000);
+  lcd.clear();
+  //strncpy(StateString, "TidePool Draining", lenString);
 }
 
 //gets reading from tide pool ultrasonic sensor.
@@ -197,7 +216,14 @@ String getTotalVolume(){
 
 //gets the tide state.
 String getTide(){
-  String tide = "'outgoing'";
+  String tide = "outgoing";
+  
+  if(filling == true){
+    tide = "Incoming Tide";
+  }
+  else{
+    tide = "Outgoing Tide";
+  }
   return tide;
 }
 
@@ -209,9 +235,7 @@ String getAvTemp(){
 
 //create and send log files to PI
 void sendLog(){
-  strncpy(StateString, "Sending log", lenString);
-  String logStr = "LOG,22,9,600,'outgoing',21";
-  Serial.begin(9600);
+  String logStr = "";
 
   logStr = "LOG," + getTWaterDepth();
   logStr += "," + getRWaterDepth();
@@ -219,13 +243,13 @@ void sendLog(){
   logStr += "," + getTide();
   logStr += "," + getAvTemp();
 
-  Serial.println(logStr); 
+  Serial.println(logStr);  
   }
 
 //logTimer()
 void logTimer(){
   //check logCount
-  if(logCount >= 30000){
+  if(logCount >= 60000){
     sendLog();
     logCount = 0;
   }
@@ -235,10 +259,9 @@ void logTimer(){
 }
 
 void initVariables(){
-  strncpy(StateString, "init called", lenString);
   if ( currentTime - startTime >= TideInterval || startTime > currentTime) {
     //Initially set the flow to neutral
-    tideNeutral();
+    tideIdle();
     
     // start variable makes sure this loop is executed at the beginning when t=0
     start = false;
@@ -392,7 +415,7 @@ void runCycle(){
         PumpOn = false;
         previousTime = currentTime;
         strncpy(StateString, "Stop fill High Tide", lenString);
-        tideNeutral();
+        tideIdle();
         }
     } 
     else if ( PumpOn && (currentTime - previousTime) >= pumpOnTime ){
@@ -418,7 +441,7 @@ void runCycle(){
       else{
         // Pump stays off for the pumpOffTime
         //digitalWrite( PumpFill, writePumpOff);
-        tideNeutral();
+        tideIdle();
       }
   }
   
@@ -451,13 +474,11 @@ void runCycle(){
     //Serial.println(F("in Draining, checking if pumpon"));
     if ( PumpOn && !LowTide) {
       // Pump stays on for the pumpOnTime
-      //digitalWrite(PumpDrain, writePumpOn);
       tideOut();
     }
     else {
       // Pump stays off for the pumpOffTime
-      //digitalWrite(PumpDrain, writePumpOff);
-      tideNeutral();
+      tideIdle();
     }
   }
 }
@@ -546,54 +567,50 @@ void setStateSring(){
   }
 }
 
-// Run initial setup of variables
+//End of functions----------------
+
+// Run initial setup
 void setup() {
+  
   // Start serial connection so that we can print to the LCD screen for testing
   Serial.begin(9600);
   
-  test();
-  delay(5000);
-  
   lcd.begin(16, 2);     // set up the LCD's number of columns and rows
   lcd.setRGB(0, 255, 0); // make lcd green initially
-
+  
   // Set the various digital input pins
   pinMode( InHigh, INPUT );
   pinMode( InLow, INPUT );
   pinMode( InRef, INPUT );
   pinMode( echoPin, INPUT );
-
+  
   // Set the various digital output pins
   pinMode( HighLED, OUTPUT );
   pinMode( LowLED, OUTPUT );
-  
   pinMode( triggerPin, OUTPUT );
-  start = true;
-
+  
+  //set started to false
+  started = false;
+  
   // these variables will be used later to change whether the tide pool if filling or emptying
   LowTide = digitalRead(InLow);
   HighTide = digitalRead(InHigh);
-
-  dumpState(0, "");              // print current state
-
-  //attaches tideServo to pin 5
-  tideServo.attach(5);  
-  //attaches tideServo to pin 11
-  rayServo.attach(11);  
-  tideNeutral();
-  Serial.println("exiting setup");
-  sendLog();
-
   
+  //dumpState(0, "");              // print current state
+  
+  //attaches tideServo to pin 5
+  tideServo.attach(5);
+  
+  //attaches rayServo to pin 11
+  rayServo.attach(11); 
+
+  //set tide to Idle
+  tideIdle();
 }
 
 // Main program
 void loop() {
   
-  sendLog();//------------------
-  sendLog();
-  delay(5000);
-  sendLog();
   logTimer();
   // Read the current time... everything is testing time intervals.
   currentTime = millis();
@@ -605,14 +622,11 @@ void loop() {
   initVariables();
   // Now we need to check our sensors.... but make sure to debounce the readings
   
-  //
   readingSensorHigh = digitalRead(InHigh);
   readingSensorLow = digitalRead(InLow);
   readingSensorRef = digitalRead(InRef);
   
   // Check to see if the switches changed state due to either noise or water level
-  
-  //
   checkSwitchState();
   
   /*
@@ -624,7 +638,6 @@ void loop() {
   // Set the HighTide or LowTide boolean values and then turn off the appropriate valve
   // Indicator light: solid LED if a sensor is set, blink the HighLED if you are filling
   // and blink the LowLED if you are not filling
-  //
   
   // sets the filling and draining
   setHighLowVals();
@@ -640,6 +653,6 @@ void loop() {
   runCycle();
   
   // set stateString
-  setStateSring();
+  //setStateSring();--------------------
 }
-// End of void() loop
+// End of loop()
