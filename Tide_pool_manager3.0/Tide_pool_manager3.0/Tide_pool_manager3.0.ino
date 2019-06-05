@@ -27,6 +27,11 @@ const int InRef  = 8;
 const int HighLED = 9;
 const int LowLED  = 10;
 
+//temperature sensor pin
+const int tempIn = 4;
+
+//Pins 5 and 11 are saved for servos
+
 //end of pin constants ******************************************
 
 
@@ -36,7 +41,7 @@ unsigned long startTime = 0;                        // store the tide half-cycle
 unsigned long previousTime = 0;                     // store the time since the pump was either turned on or off.
 
 // 6.5 hours is the half-period of a tide (in msec)
-const unsigned long TideInterval = 6.5 * 60 * 60 * 1000;
+const unsigned long TideInterval = 6.2438 * 60 * 60 * 1000;
 
 // Pump is ON for 5 minutes
 const unsigned long pumpOnTime = 5.0 * 60 * 1000;
@@ -164,9 +169,13 @@ void tideIdle(){
   tideServo.write(0);
   rayServo.write(90);
   
-  lcd.print("Tide Idle");
-  delay(2000);
+  //clear LCD
   lcd.clear();
+  
+  // output to lcd
+  lcd.print("Tide Pool Is");
+  lcd.setCursor(0,1);
+  lcd.print("Idle");
 }
 
 
@@ -176,11 +185,13 @@ void tideIn(){
   tideServo.write(0);
   rayServo.write(0);
   
-  //display to lcd
-  lcd.print("Tide Pool Filling");
-  delay(2000);
+  //clear LCD
   lcd.clear();
-  //strncpy(StateString, "TidePool ", lenString);  
+  
+  // output to lcd
+  lcd.print("Tide Pool Is");
+  lcd.setCursor(0,1);
+  lcd.print("Filling");
 }
 
 //move water out of the tidepool into the ray tank
@@ -189,11 +200,13 @@ void tideOut(){
   tideServo.write(90);
   rayServo.write(90);
   
-  // output to lcd
-  lcd.print("Tide Pool Filling");
-  delay(2000);
+  //clear LCD
   lcd.clear();
-  //strncpy(StateString, "TidePool Draining", lenString);
+  
+  // output to lcd
+  lcd.print("Tide Pool Is");
+  lcd.setCursor(0,1);
+  lcd.print("Idle");
 }
 
 //gets reading from tide pool ultrasonic sensor.
@@ -216,10 +229,16 @@ String getTotalVolume(){
 
 //gets the tide state.
 String getTide(){
-  String tide = "outgoing";
+  String tide = "";
   
   if(filling == true){
     tide = "Incoming Tide";
+  }
+  else if(HighTide == true){
+    tide = "High Tide";
+  }
+  else if(LowTide == true){
+    tide = "Low Tide";
   }
   else{
     tide = "Outgoing Tide";
@@ -236,20 +255,35 @@ String getAvTemp(){
 //create and send log files to PI
 void sendLog(){
   String logStr = "";
+  String tideStr = getTide();
 
   logStr = "LOG," + getTWaterDepth();
   logStr += "," + getRWaterDepth();
   logStr += "," + getTotalVolume();
-  logStr += "," + getTide();
+  logStr += "," + tideStr;
   logStr += "," + getAvTemp();
 
-  Serial.println(logStr);  
+  Serial.println(logStr); 
+
+  //clear LCD
+  lcd.clear();
+  
+  // output to lcd
+  lcd.print("Sending Log");
+  delay(1000);
+  
+  //clear LCD
+  lcd.clear();
+  
+  // output to lcd
+  lcd.print(tideStr);
+  delay(1000);
   }
 
 //logTimer()
 void logTimer(){
   //check logCount
-  if(logCount >= 60000){
+  if(logCount >= 2){
     sendLog();
     logCount = 0;
   }
@@ -264,7 +298,7 @@ void initVariables(){
     tideIdle();
     
     // start variable makes sure this loop is executed at the beginning when t=0
-    start = false;
+    start = true;
     //check for high tide
     if ( HighTide ) {
       HighTide = false;
@@ -347,12 +381,14 @@ void checkSwitchState(){
 
 // setHighLowVals
 void setHighLowVals(){
-  
+  lcd.clear();
+  //check for high tide
   if ( sensorHigh == HIGH ) {
     HighTide = true;
     digitalWrite( HighLED, HIGH);
     
-    strncpy(SensorString, "HIGH WATER!", lenString);
+    
+    lcd.print("High Water");
   } 
   else {
     HighTide = false;
@@ -360,52 +396,86 @@ void setHighLowVals(){
     Serial.println(F("Setting High and Low Tide, Made LED LOW"));
   }
 
-  strncpy(SensorString, "Check sensor Low == HIGH", lenString);
-  
+
+  //check for low tide
   if (sensorLow == HIGH) {
     LowTide = true;
     digitalWrite( LowLED, HIGH);
-    
-    strncpy(SensorString, "LOW WATER!", lenString);
+    lcd.print("Low Tide");
   } 
   else {
     LowTide = false;
     digitalWrite( LowLED, LOW);
   }
-
+  
+  //check for error
   if (sensorLow == LOW and sensorHigh == LOW) {
-    
-    strncpy(SensorString, "Finish Update", lenString);
-
+    lcd.print("Sensor Error");
   }
+
 
   // if both the low sensor and high sensor are tripped, we have an error
   if (sensorLow == HIGH and sensorHigh == HIGH) {
-    strncpy(SensorString, "SENSOR ERROR!", lenString);
+    lcd.print("Sensor Error");
   }
+
 
   // Blink the indicator LED if it is not high or low tide
   if ( !HighTide && !LowTide ) {
     if ( (currentTime - timeLED) >= blinkLED ) {
-      // if the LED is off turn it on and vice-versa:
+    // if the LED is off turn it on and vice-versa:
       if ( stateLED == LOW) {
         stateLED = HIGH;
-      } else {
+      } 
+      else {
         stateLED = LOW;
       }
       timeLED = currentTime;
     }
     if ( filling ) {
       digitalWrite( HighLED, stateLED);
-    } else {
+    }
+  else {
       digitalWrite( LowLED, stateLED);
     }
   }
 
 }
 
+void showTideState(){
+  lcd.clear();
+  if(filling == true){
+    lcd.print("Tide");
+    lcd.setCursor(0,1);
+    lcd.print("Incoming");
+  }
+  else{
+    lcd.print("Tide");
+    lcd.setCursor(0,1);
+    lcd.print("Outgoing");
+  }
+  
+  delay(1000);
+}
+
+void showMovingWater(){
+  lcd.clear();
+  if(PumpOn == true){
+    lcd.print("Moving water");
+  }
+  else{
+    lcd.print("Not Moving Water");
+  }
+  delay(1000);
+}
+
 void runCycle(){
   //Serial.println(F("Checking filling & !HighTide"));
+  
+  showTideState();
+  
+  showMovingWater();
+  
   if ( filling ){
     // if in high tide turn pump off
     // if not high tide, switch between turning the pump on and off
@@ -414,7 +484,7 @@ void runCycle(){
       if ((currentTime - previousTime) >= pumpOnTime) {
         PumpOn = false;
         previousTime = currentTime;
-        strncpy(StateString, "Stop fill High Tide", lenString);
+        //strncpy(StateString, "Stop fill High Tide", lenString);
         tideIdle();
         }
     } 
@@ -423,26 +493,23 @@ void runCycle(){
       blinkLED = blinkSlow;
       previousTime = currentTime;
       
-      strncpy(StateString, "Pause Filling", lenString);
+      // Pump stays on for the pumpOnTime
+      //strncpy(StateString, "Pause Filling", lenString);
+      //seting tide to idle
+      tideIdle();
     }
     else if ( !PumpOn && (currentTime - previousTime) >= pumpOffTime ){
       PumpOn = true;
       blinkLED = blinkFast;
       previousTime = currentTime;
       
+      // Pump stays off for the pumpOffTime
       // print if is filling
-      strncpy(StateString, "Filling Tidepool", lenString);
-    }
-    if ( PumpOn && !HighTide) {
-      // Pump stays on for the pumpOnTime
-      //digitalWrite( PumpFill, writePumpOn);
+      //strncpy(StateString, "Filling Tidepool", lenString);
+      //set to fill tidepool
       tideIn();
-      }
-      else{
-        // Pump stays off for the pumpOffTime
-        //digitalWrite( PumpFill, writePumpOff);
-        tideIdle();
-      }
+    }
+    
   }
   
   //Serial.println(F("Not filling"));
@@ -452,7 +519,15 @@ void runCycle(){
         PumpOn = false;
         previousTime = currentTime;
         
-        strncpy(StateString, "Stop drain low tide", lenString);
+        //clear LCD
+        lcd.clear();
+  
+        // output to lcd
+        lcd.print("Stop Drain");
+        lcd.print("Low Tide");
+        
+        //strncpy(StateString, "Stop drain low tide", lenString);
+        tideIdle();
       }
     }
     else if ( PumpOn && (currentTime - previousTime) >= pumpOnTime ) {
@@ -462,6 +537,10 @@ void runCycle(){
       
       // print if paused draining
       strncpy(StateString, "Pause Draining Tidepool", lenString);
+      
+      //set to idle
+      // Pump stays off for the pumpOffTime
+      tideIdle();
     }
     else if ( !PumpOn && (currentTime - previousTime) >= pumpOffTime ) {
       PumpOn = true;
@@ -469,16 +548,10 @@ void runCycle(){
       previousTime = currentTime;
       
       // print if is draining
-      strncpy(StateString, "Draining Tidepool", lenString);
-    }
-    //Serial.println(F("in Draining, checking if pumpon"));
-    if ( PumpOn && !LowTide) {
+      //strncpy(StateString, "Draining Tidepool", lenString);
+      
       // Pump stays on for the pumpOnTime
       tideOut();
-    }
-    else {
-      // Pump stays off for the pumpOffTime
-      tideIdle();
     }
   }
 }
@@ -603,6 +676,9 @@ void setup() {
   
   //attaches rayServo to pin 11
   rayServo.attach(11); 
+  
+  //run test
+  test();
 
   //set tide to Idle
   tideIdle();
@@ -610,16 +686,28 @@ void setup() {
 
 // Main program
 void loop() {
+  lcd.clear();
+  lcd.print("In loop");
+  delay(1000);
   
   logTimer();
+  
   // Read the current time... everything is testing time intervals.
   currentTime = millis();
+  
+  lcd.clear();
+  lcd.print("mills set");
+  delay(1000);
   
   // If you are at High or Low tide you need to wait until the tide interval is complete.  The time has to reach
   // the end of the TideInterval.
   
   // initializes variables at the start of a filling or falling tide
   initVariables();
+  lcd.clear();
+  lcd.print("Init");
+  delay(1000);
+  
   // Now we need to check our sensors.... but make sure to debounce the readings
   
   readingSensorHigh = digitalRead(InHigh);
@@ -628,6 +716,10 @@ void loop() {
   
   // Check to see if the switches changed state due to either noise or water level
   checkSwitchState();
+  
+  lcd.clear();
+  lcd.print("checkedState");
+  delay(1000);
   
   /*
       Add a user programming feature here where you could action based on both triggers set.
@@ -641,6 +733,10 @@ void loop() {
   
   // sets the filling and draining
   setHighLowVals();
+  
+  lcd.clear();
+  lcd.print("setVals");
+  delay(1000);
 
   /*
       Need to wait until the High or Low tide time interval has been met. Then start a pump.
@@ -651,6 +747,9 @@ void loop() {
 
   //call runCycle
   runCycle();
+  lcd.clear();
+  lcd.print("ranCycle");
+  delay(1000);
   
   // set stateString
   //setStateSring();--------------------
