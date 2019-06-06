@@ -86,6 +86,13 @@ int readingSensorHigh;
 int readingSensorLow;
 int readingSensorRef;
 
+//ints for ultrasonic sensor height
+float raySensorHeight = 82.5;
+float tideSensorHeight = 94;
+
+float tankWidth = 122.5;
+float tankLength = 367.00;
+
 unsigned long lastTimeHigh = 0;
 unsigned long lastTimeLow = 0;
 unsigned long lastTimeRef = 0;
@@ -282,7 +289,7 @@ void tideOut(){
 //  return depth;
 //}
 
-float getWaterDepth(int triggerPin, int echoPin){
+float getWaterDepth(int triggerPin, int echoPin, float sensorHeight){
   float duration;
   float distance;
     
@@ -298,6 +305,7 @@ float getWaterDepth(int triggerPin, int echoPin){
   
   // Change time to get pulse back to centimeters
     distance = (duration / 2) / 29.1;
+    distance = sensorHeight - distance;
     
   return distance;
   }
@@ -328,9 +336,12 @@ float getWaterDepth(int triggerPin, int echoPin){
 //}
 
 //calculates the total water volume.
-String getTotalVolume(){
-  String volume = "600";
-  return volume;
+String getTotalVolume(float tDepth, float rDepth){
+
+  //calculate the total water volume
+  float volume = tankLength*tankWidth*(tDepth+rDepth);
+  
+  return String(volume);
 }
 
 //gets the tide state.
@@ -363,12 +374,12 @@ void sendLog(){
   //String logStr1 = "LOG,22,9,500,outgoing,26";
   String logStr = "";
   String tideStr = getTide();
-  String tideDepth = String(getWaterDepth(tideTriggerPin,tideEchoPin));
-  String rayDepth = String(getWaterDepth(rayTriggerPin,rayEchoPin));
+  float tideDepth = getWaterDepth(tideTriggerPin,tideEchoPin, tideSensorHeight);
+  float rayDepth = getWaterDepth(rayTriggerPin,rayEchoPin, raySensorHeight);
 
-  logStr = "LOG," + tideDepth;
-  logStr += "," + rayDepth;
-  logStr += "," + getTotalVolume();
+  logStr = "LOG," + String(tideDepth);
+  logStr += "," + String(rayDepth);
+  logStr += "," + getTotalVolume(tideDepth, rayDepth);
   logStr += "," + tideStr;
   logStr += "," + getAvTemp();
 
@@ -388,7 +399,7 @@ void sendLog(){
   lcd.print(tideStr);
   delay(1000);
 
-  lcd.setCurser(0,1);
+  lcd.setCursor(0,1);
   // output to lcd
   lcd.print(tideDepth);
   delay(1000);
@@ -422,16 +433,21 @@ void initVariables(){
       HighTide = false;
       filling = false;
       draining = true;
+
+      lcd.setRGB(0,255,0);
     }
     else if ( LowTide ) {
       LowTide = false;
       filling = true;
       draining = false;
+      lcd.setRGB(0,0,255);
     }
     else {
       // possibly the high and low tide sensor switches never get triggered
       filling = false;
       draining = true;
+      
+      lcd.setRGB(0,255,0);
       // in the tide interval (testing-situation)
     }
     
@@ -538,6 +554,7 @@ void setHighLowVals(){
 
   // if both the low sensor and high sensor are tripped, we have an error
   if (sensorLow == HIGH and sensorHigh == HIGH) {
+    lcd.setRGB(255,0,0);
     lcd.print("Sensor Error");
   }
 
@@ -567,11 +584,13 @@ void setHighLowVals(){
 void showTideState(){
   lcd.clear();
   if(filling == true){
+    lcd.setRGB(0,0,255);
     lcd.print("Tide");
     lcd.setCursor(0,1);
     lcd.print("Incoming");
   }
   else{
+    lcd.setRGB(0,255,0);
     lcd.print("Tide");
     lcd.setCursor(0,1);
     lcd.print("Outgoing");
