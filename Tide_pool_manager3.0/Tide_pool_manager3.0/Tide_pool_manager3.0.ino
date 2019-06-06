@@ -7,7 +7,7 @@
 rgb_lcd lcd;
 
 boolean start;
-boolean started = false;
+boolean started;
 
 // Pin constants *****************************
 // NOTE: Don't have any on pin 13 as this pin goes high when reset
@@ -17,8 +17,8 @@ const int InHigh =  3;
 const int InLow  =  2;
 
 // ultrasonic sensor pins
-const int triggerPin = 6;
-const int echoPin = 7;
+const int tideTriggerPin = 6;
+const int tideEchoPin = 7;
 
 // reference voltage pin
 const int InRef  = 8;
@@ -29,6 +29,11 @@ const int LowLED  = 10;
 
 //temperature sensor pin
 const int tempIn = 4;
+
+//pins for ray tank sensor
+// ultrasonic sensor pins
+const int rayTriggerPin = 12;
+const int rayEchoPin = 13;
 
 //Pins 5 and 11 are saved for servos
 
@@ -156,13 +161,70 @@ void dumpState(long currentTime, String msg) {
 //Tide in for 5 seconds then tideOut for 5 seconds.
 void test(){
   tideIdle();
-  delay(5000);
+  delay(7000);
   tideIn();
-  delay(5000);
+  delay(7000);
   tideOut();
-  delay(5000);
+  delay(7000);
   
 }
+
+//Sets the tidepool to lowTide
+void setLowTide(){
+  lcd.clear();
+  lcd.print("Setting System");
+  lcd.setCursor(0,1);
+  lcd.print("To Low Tide");
+  delay(5000);
+  
+  //add second sensor to loop later
+  while(LowTide == false){
+    tideOut();
+    delay(50000);
+    tideIdle();
+    LowTide = digitalRead(InLow);
+    sendLog();
+  }
+  
+  //seting state variables
+  filling = true;
+  draining = false;
+  
+  lcd.clear();
+  lcd.print("Tide Set");
+  lcd.setCursor(0,1);
+  lcd.print("To Low");
+  delay(5000);
+}
+
+//Sets the tidepool to HighTide
+void setHighTide(){
+  lcd.clear();
+  lcd.print("Setting System");
+  lcd.setCursor(0,1);
+  lcd.print("To High Tide");
+  delay(5000);
+  
+  //add second sensor to loop later
+  while(HighTide == false){
+    tideIn();
+    delay(5000);
+    tideIdle();
+    sendLog();
+    HighTide = digitalRead(InHigh);
+  }
+  
+  //seting state variables
+  filling = false;
+  draining = true;
+  
+  lcd.clear();
+  lcd.print("Tide Set");
+  lcd.setCursor(0,1);
+  lcd.print("To High");
+  delay(5000);
+}
+
 
 //tideIdle water goes into both tanks
 void tideIdle(){
@@ -206,20 +268,64 @@ void tideOut(){
   // output to lcd
   lcd.print("Tide Pool Is");
   lcd.setCursor(0,1);
-  lcd.print("Idle");
+  lcd.print("Draining");
 }
 
-//gets reading from tide pool ultrasonic sensor.
-String getTWaterDepth(){
-  String depth = "22";
-  return depth;
-}
+////gets reading from tide pool ultrasonic sensor.
+//String getTWaterDepth(){
+//  String depth = "22";
+//  
+//  //depth = getWater
+//    
+//  depth = String(distance,0);
+//  
+//  return depth;
+//}
 
-//gets ray tank ultrasonic sensor reading.
-String getRWaterDepth(){
-  String depth = "9";
-  return depth;
-}
+float getWaterDepth(int triggerPin, int echoPin){
+  float duration;
+  float distance;
+    
+    // send ultrasonic pulse
+    digitalWrite(triggerPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(triggerPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(triggerPin, LOW);
+    
+    // see how long pulse takes to return to echo pin
+    duration = pulseIn(echoPin, HIGH, 50000);
+  
+  // Change time to get pulse back to centimeters
+    distance = (duration / 2) / 29.1;
+    
+  return distance;
+  }
+
+////gets ray tank ultrasonic sensor reading.
+//String getRWaterDepth(){
+//  String depth = "22";
+//  
+//  float duration;
+//  float distance;
+//    
+//    // send ultrasonic pulse
+//    digitalWrite(triggerPin, LOW);
+//    delayMicroseconds(2);
+//    digitalWrite(triggerPin, HIGH);
+//    delayMicroseconds(10);
+//    digitalWrite(triggerPin, LOW);
+//    
+//    // see how long pulse takes to return to echo pin
+//    duration = pulseIn(echoPin, HIGH, 50000);
+//  
+//  // Change time to get pulse back to centimeters
+//    distance = (duration / 2) / 29.1;
+//    
+//  depth = String(distance,0);
+//
+//  return depth;
+//}
 
 //calculates the total water volume.
 String getTotalVolume(){
@@ -254,11 +360,14 @@ String getAvTemp(){
 
 //create and send log files to PI
 void sendLog(){
+  //String logStr1 = "LOG,22,9,500,outgoing,26";
   String logStr = "";
   String tideStr = getTide();
+  String tideDepth = String(getWaterDepth(tideTriggerPin,tideEchoPin));
+  String rayDepth = String(getWaterDepth(rayTriggerPin,rayEchoPin));
 
-  logStr = "LOG," + getTWaterDepth();
-  logStr += "," + getRWaterDepth();
+  logStr = "LOG," + tideDepth;
+  logStr += "," + rayDepth;
   logStr += "," + getTotalVolume();
   logStr += "," + tideStr;
   logStr += "," + getAvTemp();
@@ -278,6 +387,11 @@ void sendLog(){
   // output to lcd
   lcd.print(tideStr);
   delay(1000);
+
+  lcd.setCurser(0,1);
+  // output to lcd
+  lcd.print(tideDepth);
+  delay(1000);
   }
 
 //logTimer()
@@ -292,24 +406,32 @@ void logTimer(){
   }
 }
 
+
+//intiualize the High low variables
 void initVariables(){
-  if ( currentTime - startTime >= TideInterval || startTime > currentTime) {
+  if ( (currentTime - startTime >= TideInterval) || (startTime > currentTime) || (start = true)) {
     //Initially set the flow to neutral
     tideIdle();
     
-    // start variable makes sure this loop is executed at the beginning when t=0
-    start = true;
+    // start variable makes sure this loop is executed at the beginning after initial setup
+    start = false;
+    
+    
     //check for high tide
     if ( HighTide ) {
       HighTide = false;
       filling = false;
+      draining = true;
     }
     else if ( LowTide ) {
       LowTide = false;
       filling = true;
+      draining = false;
     }
     else {
-      filling = !filling;      // possibly the high and low tide sensor switches never get triggered
+      // possibly the high and low tide sensor switches never get triggered
+      filling = false;
+      draining = true;
       // in the tide interval (testing-situation)
     }
     
@@ -410,7 +532,7 @@ void setHighLowVals(){
   
   //check for error
   if (sensorLow == LOW and sensorHigh == LOW) {
-    lcd.print("Sensor Error");
+    lcd.print("Updating");
   }
 
 
@@ -615,24 +737,24 @@ void setStateSring(){
   // update online log with water level
   if((currentTime - lastTimeUpdated) > delayUpdate) {
     Serial.println(F("Updating online water level"));
-    float duration, distance;
-    
-    // send ultrasonic pulse
-    digitalWrite(triggerPin, LOW);
-    delayMicroseconds(2);
-    digitalWrite(triggerPin, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(triggerPin, LOW);
-    
-    // see how long pulse takes to return to echo pin
-    duration = pulseIn(echoPin, HIGH, 50000);
-    distance = (duration / 2) / 29.1;    // Change time to get pulse back to centimeters
-    Serial.print("duration->");
-    Serial.println(duration);
-    
-    // save count to the 'distance' feed on Adafruit IO
-    Serial.print("level sending -> ");
-    Serial.println(distance);
+//    float duration, distance;
+//    
+//    // send ultrasonic pulse
+//    digitalWrite(triggerPin, LOW);
+//    delayMicroseconds(2);
+//    digitalWrite(triggerPin, HIGH);
+//    delayMicroseconds(10);
+//    digitalWrite(triggerPin, LOW);
+//    
+//    // see how long pulse takes to return to echo pin
+//    duration = pulseIn(echoPin, HIGH, 50000);
+//    distance = (duration / 2) / 29.1;    // Change time to get pulse back to centimeters
+//    Serial.print("duration->");
+//    Serial.println(duration);
+//    
+//    // save count to the 'distance' feed on Adafruit IO
+//    Serial.print("level sending -> ");
+//    Serial.println(distance);
     //ultrasonicSensorFeed->save(distance);
 
     // update last time updated
@@ -646,7 +768,7 @@ void setStateSring(){
 void setup() {
   
   // Start serial connection so that we can print to the LCD screen for testing
-  Serial.begin(9600);
+  Serial.begin(115200);
   
   lcd.begin(16, 2);     // set up the LCD's number of columns and rows
   lcd.setRGB(0, 255, 0); // make lcd green initially
@@ -655,14 +777,16 @@ void setup() {
   pinMode( InHigh, INPUT );
   pinMode( InLow, INPUT );
   pinMode( InRef, INPUT );
-  pinMode( echoPin, INPUT );
+  pinMode( tideEchoPin, INPUT );
+  pinMode( rayEchoPin, INPUT );
   
   // Set the various digital output pins
   pinMode( HighLED, OUTPUT );
   pinMode( LowLED, OUTPUT );
-  pinMode( triggerPin, OUTPUT );
+  pinMode( tideTriggerPin, OUTPUT );
+  pinMode( rayTriggerPin, OUTPUT );
   
-  //set started to false
+  //set started to false for first loop
   started = false;
   
   // these variables will be used later to change whether the tide pool if filling or emptying
@@ -679,9 +803,15 @@ void setup() {
   
   //run test
   test();
+  
+  //set to low tide
+  setLowTide();
+  
+  //Can also be set to High at start using setHighTide(); default is low
+  setHighTide();
 
   //set tide to Idle
-  tideIdle();
+  //tideIdle();
 }
 
 // Main program
@@ -690,7 +820,8 @@ void loop() {
   lcd.print("In loop");
   delay(1000);
   
-  logTimer();
+  //logTimer();
+  sendLog();
   
   // Read the current time... everything is testing time intervals.
   currentTime = millis();
