@@ -1,12 +1,24 @@
 
+/*
+  Author: Joshua DeNio 
+  Contributors: Steve Lindaas, Paige Meyer
+  Date:6/12/2019
+  Description:
+    This program runs on an Arduino and is used to control water movement between two marine tanks replicating a natural tide pool.
+    There are two valves controlled using servos to direct water to the desired destination. The pumps always run to prevent 
+    pump failure. The Arduino reads two float sensors to control the range of water depth. The code will control the cycle time
+    to match a natural tide cycle as closely as possible.
+ */
 
+
+//#include <DallasTemperature.h>
 #include <Wire.h>
 #include <Servo.h>
 #include <rgb_lcd.h>
 
 rgb_lcd lcd;
 
-boolean start;
+//boolean start;
 boolean started;
 
 // Pin constants *****************************
@@ -59,8 +71,8 @@ boolean HighTide = false; // Default lowering tide when you first turn on the sy
 boolean LowTide = false;
 
 //bools for pump state
-boolean filling = false;
-boolean draining = false;
+boolean filling;
+boolean draining;
 boolean PumpOn = true;
 
 //Limiters
@@ -185,17 +197,19 @@ void setLowTide(){
   delay(5000);
   
   //add second sensor to loop later
+
+  //while not low tide pump out some water and check level
   while(LowTide == false){
     tideOut();
-    delay(50000);
+    delay(60000);
     tideIdle();
     LowTide = digitalRead(InLow);
     sendLog();
   }
   
   //seting state variables
-  filling = true;
-  draining = false;
+  filling = false;
+  draining = true;
   
   lcd.clear();
   lcd.print("Tide Set");
@@ -215,15 +229,15 @@ void setHighTide(){
   //add second sensor to loop later
   while(HighTide == false){
     tideIn();
-    delay(5000);
+    delay(60000);
     tideIdle();
     sendLog();
     HighTide = digitalRead(InHigh);
   }
   
   //seting state variables
-  filling = false;
-  draining = true;
+  filling = true;
+  draining = false;
   
   lcd.clear();
   lcd.print("Tide Set");
@@ -310,6 +324,24 @@ float getWaterDepth(int triggerPin, int echoPin, float sensorHeight){
   return distance;
   }
 
+float averageWaterDepth(int triggerPin, int echoPin, float sensorHeight){
+  float distance1 = getWaterDepth(triggerPin, echoPin, sensorHeight);
+  float distance2 = getWaterDepth(triggerPin, echoPin, sensorHeight);
+  float distance3 = getWaterDepth(triggerPin, echoPin, sensorHeight);
+  float lowestMeasure;
+
+  if(distance1 <= distance2){
+    lowestMeasure = distance1;
+  }
+  else{
+    lowestMeasure = distance2;
+  }
+  if(distance3 < lowestMeasure){
+    lowestMeasure = distance3;
+  }
+  return lowestMeasure;
+}
+
 ////gets ray tank ultrasonic sensor reading.
 //String getRWaterDepth(){
 //  String depth = "22";
@@ -374,8 +406,8 @@ void sendLog(){
   //String logStr1 = "LOG,22,9,500,outgoing,26";
   String logStr = "";
   String tideStr = getTide();
-  float tideDepth = getWaterDepth(tideTriggerPin,tideEchoPin, tideSensorHeight);
-  float rayDepth = getWaterDepth(rayTriggerPin,rayEchoPin, raySensorHeight);
+  float tideDepth = averageWaterDepth(tideTriggerPin,tideEchoPin, tideSensorHeight);
+  float rayDepth = averageWaterDepth(rayTriggerPin,rayEchoPin, raySensorHeight);
 
   logStr = "LOG," + String(tideDepth);
   logStr += "," + String(rayDepth);
@@ -420,12 +452,12 @@ void logTimer(){
 
 //intiualize the High low variables
 void initVariables(){
-  if ( (currentTime - startTime >= TideInterval) || (startTime > currentTime) || (start = true)) {
+  if ( (currentTime - startTime >= TideInterval) || (startTime > currentTime) || (started == false)) {
     //Initially set the flow to neutral
     tideIdle();
     
-    // start variable makes sure this loop is executed at the beginning after initial setup
-    start = false;
+    // started variable makes sure this loop is executed at the beginning after initial setup
+    started = true;
     
     
     //check for high tide
@@ -440,7 +472,7 @@ void initVariables(){
       LowTide = false;
       filling = true;
       draining = false;
-      lcd.setRGB(0,0,255);
+      lcd.setRGB(0,0,230);
     }
     else {
       // possibly the high and low tide sensor switches never get triggered
@@ -584,7 +616,7 @@ void setHighLowVals(){
 void showTideState(){
   lcd.clear();
   if(filling == true){
-    lcd.setRGB(0,0,255);
+    lcd.setRGB(0,0,230);
     lcd.print("Tide");
     lcd.setCursor(0,1);
     lcd.print("Incoming");
@@ -749,7 +781,7 @@ void setStateSring(){
     else if (strcmp(SensorString, "SENSOR ERROR!") == 0) {
         lcd.setRGB(255, 0, 0);           // has error, turn background red
     } else {
-        lcd.setRGB(0, 0, 255);          // high or low sensor triggered, turn background blue
+        lcd.setRGB(0, 0, 230);          // high or low sensor triggered, turn background blue
     }
   } // end sensor string update
 
@@ -812,8 +844,6 @@ void setup() {
   LowTide = digitalRead(InLow);
   HighTide = digitalRead(InHigh);
   
-  //dumpState(0, "");              // print current state
-  
   //attaches tideServo to pin 5
   tideServo.attach(5);
   
@@ -827,7 +857,7 @@ void setup() {
   setLowTide();
   
   //Can also be set to High at start using setHighTide(); default is low
-  setHighTide();
+  //setHighTide();
 
   //set tide to Idle
   //tideIdle();
@@ -835,9 +865,6 @@ void setup() {
 
 // Main program
 void loop() {
-  lcd.clear();
-  lcd.print("In loop");
-  delay(1000);
   
   //logTimer();
   sendLog();
@@ -854,9 +881,6 @@ void loop() {
   
   // initializes variables at the start of a filling or falling tide
   initVariables();
-  lcd.clear();
-  lcd.print("Init");
-  delay(1000);
   
   // Now we need to check our sensors.... but make sure to debounce the readings
   
