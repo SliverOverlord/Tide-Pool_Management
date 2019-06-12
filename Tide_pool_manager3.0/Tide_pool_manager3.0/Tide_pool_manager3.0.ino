@@ -1,4 +1,3 @@
-
 /*
   Author: Joshua DeNio 
   Contributors: Steve Lindaas, Paige Meyer
@@ -10,11 +9,11 @@
     to match a natural tide cycle as closely as possible.
  */
 
-
-//#include <DallasTemperature.h>
 #include <Wire.h>
 #include <Servo.h>
 #include <rgb_lcd.h>
+#include <DallasTemperature.h>
+#include <OneWire.h>
 
 rgb_lcd lcd;
 
@@ -145,6 +144,10 @@ Servo rayServo;
 
 //counter for log
 unsigned long logCount = 0;
+
+//wire buss for temp sensor
+OneWire oneWire(tempIn);
+DallasTemperature sensors(&oneWire);
 
 //Functions--------------------------------------
 
@@ -398,6 +401,10 @@ String getTide(){
 //gets the temperature reading.
 String getAvTemp(){
   String tmp = "21";
+
+  sensors.requestTemperatures();
+  tmp =String(sensors.getTempCByIndex(0));
+  
   return tmp;
 }
 
@@ -836,6 +843,8 @@ void setup() {
   pinMode( LowLED, OUTPUT );
   pinMode( tideTriggerPin, OUTPUT );
   pinMode( rayTriggerPin, OUTPUT );
+
+  sensors.begin();
   
   //set started to false for first loop
   started = false;
