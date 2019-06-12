@@ -649,7 +649,7 @@ void runCycle(){
   
   showMovingWater();
   
-  if ( filling ){
+  if ( filling == true ){
     // if in high tide turn pump off
     // if not high tide, switch between turning the pump on and off
     if ( HighTide ){
@@ -686,7 +686,7 @@ void runCycle(){
   }
   
   //Serial.println(F("Not filling"));
-  if ( !filling ) {
+  if ( draining == true) {
     if ( LowTide ) {
       if ((currentTime - previousTime) >= pumpOnTime) {
         PumpOn = false;
