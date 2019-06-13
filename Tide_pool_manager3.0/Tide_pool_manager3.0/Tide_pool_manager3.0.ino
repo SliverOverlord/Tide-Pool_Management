@@ -98,8 +98,8 @@ int readingSensorLow;
 int readingSensorRef;
 
 //ints for ultrasonic sensor height
-float raySensorHeight = 82.5;
-float tideSensorHeight = 94;
+float raySensorHeight = 81.5;
+float tideSensorHeight = 93;
 
 float tankWidth = 122.5;
 float tankLength = 367.00;
@@ -154,7 +154,7 @@ DallasTemperature sensors(&oneWire);
 //Functions--------------------------------------
 
 //updates lcd with current state
-void dumpState(String tideStr, String tideDepth, String temp) {
+void dumpState(String tideStr, String tideDepth, String rayDepth, String temp) {
   //clear LCD
   lcd.clear();
   
@@ -172,6 +172,17 @@ void dumpState(String tideStr, String tideDepth, String temp) {
   lcd.setCursor(0,1);
   // output to lcd
   lcd.print(tideDepth);
+  lcd.print(" cm");
+  delay(printDelay);
+
+  //clear LCD
+  lcd.clear();
+  // output to lcd
+  lcd.print("Ray Tank");
+  lcd.setCursor(0,1);
+  // output to lcd
+  lcd.print("Depth: ");
+  lcd.print(rayDepth);
   lcd.print(" cm");
   delay(printDelay);
 
@@ -327,6 +338,7 @@ void tideOut(){
 float getWaterDepth(int triggerPin, int echoPin, float sensorHeight){
   float duration;
   float distance;
+  float waterDepth;
     
     // send ultrasonic pulse
     digitalWrite(triggerPin, LOW);
@@ -340,9 +352,9 @@ float getWaterDepth(int triggerPin, int echoPin, float sensorHeight){
   
   // Change time to get pulse back to centimeters
     distance = (duration / 2) / 29.1;
-    distance = sensorHeight - distance;
+    waterDepth = sensorHeight - distance;
     
-  return distance;
+  return waterDepth;
   }
 
 float averageWaterDepth(int triggerPin, int echoPin, float sensorHeight){
@@ -363,11 +375,14 @@ float averageWaterDepth(int triggerPin, int echoPin, float sensorHeight){
   return lowestMeasure;
 }
 
-//calculates the total water volume.
+//calculates the total water volume in liters.
 String getTotalVolume(float tDepth, float rDepth){
 
   //calculate the total water volume
   float volume = tankLength*tankWidth*(tDepth+rDepth);
+
+  //convert to Liters
+  volume = volume/1000;
   
   return String(volume);
 }
@@ -417,7 +432,7 @@ void sendLog(){
   logStr += "," + temp;
 
   Serial.println(logStr);
-  dumpState(tideStr, String(tideDepth), temp);
+  dumpState(tideStr, String(tideDepth), String(rayDepth), temp);
   }
 
 //logTimer()
