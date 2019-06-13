@@ -104,6 +104,8 @@ float tideSensorHeight = 94;
 float tankWidth = 122.5;
 float tankLength = 367.00;
 
+int printDelay = 2000;
+
 unsigned long lastTimeHigh = 0;
 unsigned long lastTimeLow = 0;
 unsigned long lastTimeRef = 0;
@@ -151,30 +153,56 @@ DallasTemperature sensors(&oneWire);
 
 //Functions--------------------------------------
 
-void dumpState(long currentTime, String msg) {
-  /* Prints state to serial monitor */
-  Serial.print(F("Time "));
-  Serial.println(currentTime);
-  // ensure these are correct
-  Serial.print(F("TideInterval "));
-  Serial.println(TideInterval);
-  Serial.print(F("PumpOnTime "));
-  Serial.println(pumpOnTime);
-  Serial.print(F("PumpOffTime "));
-  Serial.println(pumpOffTime);
+//updates lcd with current state
+void dumpState(String tideStr, String tideDepth, String temp) {
+  //clear LCD
+  lcd.clear();
+  
+  // output to lcd
+  lcd.print("Sending Log");
+  delay(printDelay);
+  
+  //clear LCD
+  lcd.clear();
+  
+  // output to lcd
+  lcd.print(tideStr);
+  delay(printDelay);
 
-  Serial.println(msg);
-  Serial.print(F("The variable PumpOn is "));
-  Serial.println(PumpOn);
-  Serial.print(F("The variable filling is "));
-  Serial.println( filling );
-  Serial.print(F("   FYI: High Water Sensor = "));
-  Serial.println(sensorHigh);
-  Serial.print("   FYI: Low Water Sensor = ");
-  Serial.println(sensorLow);
-  Serial.print(F("   FYI: Reference Sensor = "));
-  Serial.println(sensorRef);
-  Serial.println();
+  lcd.setCursor(0,1);
+  // output to lcd
+  lcd.print(tideDepth);
+  lcd.print(" cm");
+  delay(printDelay);
+
+  lcd.clear();
+  lcd.print("Temperature:");
+  lcd.setCursor(0,1);
+  lcd.print(temp+" C");
+  delay(printDelay);
+  /* Prints state to serial monitor */
+//  Serial.print(F("Time "));
+//  Serial.println(currentTime);
+//  // ensure these are correct
+//  Serial.print(F("TideInterval "));
+//  Serial.println(TideInterval);
+//  Serial.print(F("PumpOnTime "));
+//  Serial.println(pumpOnTime);
+//  Serial.print(F("PumpOffTime "));
+//  Serial.println(pumpOffTime);
+//
+//  Serial.println(msg);
+//  Serial.print(F("The variable PumpOn is "));
+//  Serial.println(PumpOn);
+//  Serial.print(F("The variable filling is "));
+//  Serial.println( filling );
+//  Serial.print(F("   FYI: High Water Sensor = "));
+//  Serial.println(sensorHigh);
+//  Serial.print("   FYI: Low Water Sensor = ");
+//  Serial.println(sensorLow);
+//  Serial.print(F("   FYI: Reference Sensor = "));
+//  Serial.println(sensorRef);
+//  Serial.println();
 
 }
 
@@ -188,7 +216,8 @@ void test(){
   delay(7000);
   tideOut();
   delay(7000);
-  
+
+  sendLog();
 }
 
 //Sets the tidepool to lowTide
@@ -295,17 +324,6 @@ void tideOut(){
   lcd.print("Draining");
 }
 
-////gets reading from tide pool ultrasonic sensor.
-//String getTWaterDepth(){
-//  String depth = "22";
-//  
-//  //depth = getWater
-//    
-//  depth = String(distance,0);
-//  
-//  return depth;
-//}
-
 float getWaterDepth(int triggerPin, int echoPin, float sensorHeight){
   float duration;
   float distance;
@@ -345,31 +363,6 @@ float averageWaterDepth(int triggerPin, int echoPin, float sensorHeight){
   return lowestMeasure;
 }
 
-////gets ray tank ultrasonic sensor reading.
-//String getRWaterDepth(){
-//  String depth = "22";
-//  
-//  float duration;
-//  float distance;
-//    
-//    // send ultrasonic pulse
-//    digitalWrite(triggerPin, LOW);
-//    delayMicroseconds(2);
-//    digitalWrite(triggerPin, HIGH);
-//    delayMicroseconds(10);
-//    digitalWrite(triggerPin, LOW);
-//    
-//    // see how long pulse takes to return to echo pin
-//    duration = pulseIn(echoPin, HIGH, 50000);
-//  
-//  // Change time to get pulse back to centimeters
-//    distance = (duration / 2) / 29.1;
-//    
-//  depth = String(distance,0);
-//
-//  return depth;
-//}
-
 //calculates the total water volume.
 String getTotalVolume(float tDepth, float rDepth){
 
@@ -404,7 +397,7 @@ String getAvTemp(){
 
   sensors.requestTemperatures();
   tmp =String(sensors.getTempCByIndex(0));
-  
+
   return tmp;
 }
 
@@ -415,33 +408,16 @@ void sendLog(){
   String tideStr = getTide();
   float tideDepth = averageWaterDepth(tideTriggerPin,tideEchoPin, tideSensorHeight);
   float rayDepth = averageWaterDepth(rayTriggerPin,rayEchoPin, raySensorHeight);
+  String temp = getAvTemp();
 
   logStr = "LOG," + String(tideDepth);
   logStr += "," + String(rayDepth);
   logStr += "," + getTotalVolume(tideDepth, rayDepth);
   logStr += "," + tideStr;
-  logStr += "," + getAvTemp();
+  logStr += "," + temp;
 
-  Serial.println(logStr); 
-
-  //clear LCD
-  lcd.clear();
-  
-  // output to lcd
-  lcd.print("Sending Log");
-  delay(1000);
-  
-  //clear LCD
-  lcd.clear();
-  
-  // output to lcd
-  lcd.print(tideStr);
-  delay(1000);
-
-  lcd.setCursor(0,1);
-  // output to lcd
-  lcd.print(tideDepth);
-  delay(1000);
+  Serial.println(logStr);
+  dumpState(tideStr, String(tideDepth), temp);
   }
 
 //logTimer()
