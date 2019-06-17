@@ -104,7 +104,7 @@ float tideSensorHeight = 93;
 float tankWidth = 122.5;
 float tankLength = 367.00;
 
-int printDelay = 2000;
+int printDelay = 3000;
 
 unsigned long lastTimeHigh = 0;
 unsigned long lastTimeLow = 0;
@@ -153,27 +153,43 @@ DallasTemperature sensors(&oneWire);
 
 //Functions--------------------------------------
 
+//prints one string to the lcd
+void printToLcd1(String str1){
+  //clear LCD
+  lcd.clear();
+  
+  // print to the lcd
+  lcd.print(str1);
+  delay(printDelay);
+}
+
+//prints two strings to the lcd
+void printToLcd2(String str1, String str2){
+  //clear LCD
+  lcd.clear();
+  
+  // print to the lcd
+  lcd.print(str1);
+  lcd.setCursor(0,1);
+  lcd.print(str2);
+  delay(printDelay);
+}
+
+
 //updates lcd with current state
 void dumpState(String tideStr, String tideDepth, String rayDepth, String temp) {
-  //clear LCD
-  lcd.clear();
-  
-  // output to lcd
-  lcd.print("Sending Log");
-  delay(printDelay);
-  
-  //clear LCD
-  lcd.clear();
-  
-  // output to lcd
-  lcd.print(tideStr);
-  delay(printDelay);
+ 
+  printToLcd1("Sending Log");
+
+  //print tide state to the lcd
+  printToLcd1(tideStr);
 
   lcd.setCursor(0,1);
   // output to lcd
   lcd.print(tideDepth);
   lcd.print(" cm");
   delay(printDelay);
+
 
   //clear LCD
   lcd.clear();
@@ -227,6 +243,9 @@ void test(){
   delay(7000);
   tideOut();
   delay(7000);
+
+  //Set back to idle
+  tideIdle();
 
   sendLog();
 }
@@ -302,6 +321,7 @@ void tideIdle(){
   lcd.print("Tide Pool Is");
   lcd.setCursor(0,1);
   lcd.print("Idle");
+  delay(printDelay);
 }
 
 
@@ -318,6 +338,7 @@ void tideIn(){
   lcd.print("Tide Pool Is");
   lcd.setCursor(0,1);
   lcd.print("Filling");
+  delay(printDelay);
 }
 
 //move water out of the tidepool into the ray tank
@@ -333,6 +354,7 @@ void tideOut(){
   lcd.print("Tide Pool Is");
   lcd.setCursor(0,1);
   lcd.print("Draining");
+  delay(printDelay);
 }
 
 float getWaterDepth(int triggerPin, int echoPin, float sensorHeight){
@@ -656,6 +678,7 @@ void runCycle(){
         PumpOn = false;
         previousTime = currentTime;
         //strncpy(StateString, "Stop fill High Tide", lenString);
+        printToLcd2("Stop Fill","High Tide");
         tideIdle();
         }
     } 
@@ -666,17 +689,22 @@ void runCycle(){
       
       // Pump stays on for the pumpOnTime
       //strncpy(StateString, "Pause Filling", lenString);
+      //print to lcd
+      printToLcd1("Pause Filling");
+      
       //seting tide to idle
       tideIdle();
     }
-    else if ( !PumpOn && (currentTime - previousTime) >= pumpOffTime ){
+    else if ( (PumpOn == false) && (currentTime - previousTime) >= pumpOffTime ){
       PumpOn = true;
       blinkLED = blinkFast;
       previousTime = currentTime;
       
       // Pump stays off for the pumpOffTime
-      // print if is filling
-      //strncpy(StateString, "Filling Tidepool", lenString);
+      
+      //print to lcd
+      printToLcd1("Filling Tidepool");
+
       //set to fill tidepool
       tideIn();
     }
@@ -689,37 +717,36 @@ void runCycle(){
       if ((currentTime - previousTime) >= pumpOnTime) {
         PumpOn = false;
         previousTime = currentTime;
-        
-        //clear LCD
-        lcd.clear();
-  
-        // output to lcd
-        lcd.print("Stop Drain");
-        lcd.print("Low Tide");
-        
-        //strncpy(StateString, "Stop drain low tide", lenString);
+
+        //print to LCD
+        printToLcd2("Stop Drain","Low Tide");
+
+        //set to idle
         tideIdle();
       }
     }
-    else if ( PumpOn && (currentTime - previousTime) >= pumpOnTime ) {
+    else if ( (PumpOn == true) && (currentTime - previousTime) >= pumpOnTime ) {
       PumpOn = false;
       blinkLED = blinkSlow;
       previousTime = currentTime;
       
       // print if paused draining
-      strncpy(StateString, "Pause Draining Tidepool", lenString);
+      //print to LCD
+      printToLcd2("Pause Draining","Tide Pool");
       
       //set to idle
       // Pump stays off for the pumpOffTime
       tideIdle();
     }
-    else if ( !PumpOn && (currentTime - previousTime) >= pumpOffTime ) {
+    else if ( (PumpOn == false) && (currentTime - previousTime) >= pumpOffTime ) {
       PumpOn = true;
       blinkLED = blinkFast;
       previousTime = currentTime;
       
       // print if is draining
-      //strncpy(StateString, "Draining Tidepool", lenString);
+
+      //print to LCD
+      printToLcd2("Draining","Tide Pool");
       
       // Pump stays on for the pumpOnTime
       tideOut();
