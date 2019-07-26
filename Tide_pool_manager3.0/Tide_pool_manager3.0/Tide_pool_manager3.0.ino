@@ -385,13 +385,13 @@ float averageWaterDepth(int triggerPin, int echoPin, float sensorHeight){
   float distance3 = getWaterDepth(triggerPin, echoPin, sensorHeight);
   float lowestMeasure;
 
-  if(distance1 <= distance2){
+  if(distance1 >= distance2){
     lowestMeasure = distance1;
   }
   else{
     lowestMeasure = distance2;
   }
-  if(distance3 < lowestMeasure){
+  if(distance3 > lowestMeasure){
     lowestMeasure = distance3;
   }
   return lowestMeasure;
